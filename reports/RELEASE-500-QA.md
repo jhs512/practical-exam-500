@@ -12,4 +12,11 @@
 
 기출 원문을 전수 검증했다는 의미가 아니며, 자체 제작 문항 전체에 대한 외부 전문가 감수까지 완료한 것은 아니다.
 
-운영 배포 확인은 배포 후 추가한다.
+## 운영 배포 확인
+
+- 주소: https://jhs512.github.io/practical-exam-500/
+- 저장소: https://github.com/jhs512/practical-exam-500
+- 배포 소스: a593fff956b77f8ddc45415d031d3d68deb5b6db
+- GitHub Actions 41584425479 성공. Ubuntu에서도 상태 단위 검사, 공개 SQL 검증, 데이터 수 검사를 통과했다.
+- 운영 index.json 및 다섯 청크 모두 HTTP 200, 로컬 검증본과 텍스트 전체 일치, 중복 ID 없는 500문항.
+- BASE_URL을 운영 주소로 설정한 Playwright 검사: 모바일·데스크톱 합계 26개 통과, 실패·건너뜀 0.
