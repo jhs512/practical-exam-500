@@ -145,6 +145,8 @@ function renderHome() {
         stat("틀림", s.wrong, "마지막 제출이 오답"),
         stat("다시 만나기", s.revisit, "맞혀도 계속 출제")),
       h("div", { class: "home-links" },
+        h("a", { class: "btn", href: "#/questions" }, "전체 문제 목록"),
+        h("a", { class: "btn", href: "#/records/correct" }, "맞힌 문제 보기"),
         h("a", { class: "btn", href: "#/records" }, "기록·다시 만나기 관리"),
         h("button", { class: "btn btn-quiet", type: "button", onclick: openReset }, "진도 초기화"))));
   focusMain();
@@ -203,40 +205,19 @@ function renderQuestion() {
   const choiceList = h("div", { class: `choices${mono ? " mono" : ""}` },
     current.order.map((cid, i) => {
       const c = byId.get(cid);
-      const input = h("input", {
-        type: "radio", name: "choice", value: cid, id: `opt-${i}`,
-        checked: current.selected === cid, disabled: current.submitted,
-        onchange: () => { current.selected = cid; updateSubmit(); },
-      });
       let mark = null;
       let cls = "choice";
       if (current.submitted) {
         if (cid === q.answer) { cls += " is-answer"; mark = h("span", { class: "mark" }, "정답"); }
         else if (cid === current.selected) { cls += " is-wrong"; mark = h("span", { class: "mark" }, "내 선택"); }
       }
-      return h("label", { class: cls, for: `opt-${i}` }, input,
+      return h("button", { class: cls, type: "button", disabled: current.submitted, onclick: () => onAnswer(cid) },
         h("span", { class: "num", "aria-hidden": "true" }, circled(i + 1)),
         h("span", { class: "choice-text" }, c.text), mark);
     }));
 
-  const submitBtn = h("button", { class: "btn btn-primary btn-wide", type: "submit", disabled: !current.selected || current.submitted }, "제출");
-  function updateSubmit() { submitBtn.disabled = !current.selected || current.submitted; }
-
-  const form = h("form", { class: "quiz-form", onsubmit: onSubmit },
-    h("fieldset", {}, h("legend", { class: "sr-only" }, "보기 중 하나를 고르세요"), choiceList),
-    current.submitted ? null : submitBtn);
-
-  const revisitOn = isRevisit(state, q.id);
-  const revisitBtn = h("button", {
-    class: `toggle${revisitOn ? " on" : ""}`, type: "button", "aria-pressed": revisitOn ? "true" : "false",
-    onclick: () => {
-      state = setRevisit(state, q.id, !isRevisit(state, q.id));
-      persist();
-      const on = isRevisit(state, q.id);
-      revisitBtn.setAttribute("aria-pressed", on ? "true" : "false");
-      revisitBtn.classList.toggle("on", on);
-    },
-  }, h("span", { class: "toggle-track", "aria-hidden": "true" }, h("span", { class: "toggle-thumb" })), "다시 만나기");
+  const form = h("fieldset", { class: "quiz-form" },
+    h("legend", { class: "sr-only" }, "보기를 누르면 바로 채점합니다"), choiceList);
 
   const header = h("div", { class: "q-meta" },
     h("span", { class: "chip" }, index.areaName[q.area]),
@@ -252,7 +233,7 @@ function renderQuestion() {
     form);
 
   const feedback = h("div", { class: "feedback-live", "aria-live": "polite", role: "status" });
-  const parts = [h("div", { class: "topbar" }, h("a", { class: "back", href: "#/" }, "← 처음"), revisitBtn), body, feedback];
+  const parts = [h("div", { class: "topbar" }, h("a", { class: "back", href: "#/" }, "← 처음")), body, feedback];
 
   if (current.submitted) {
     const correct = current.selected === q.answer;
@@ -260,15 +241,19 @@ function renderQuestion() {
     feedback.append(h("div", { class: `result ${correct ? "ok" : "ng"}` },
       h("p", { class: "result-title" }, correct ? "정답입니다" : "오답입니다"),
       correct ? null : h("p", {}, `정답은 ${circled(ansPos)}번입니다.`),
-      h("button", { class: "btn btn-primary btn-wide", type: "button", onclick: goNext }, "다음 문제")));
-    parts.push(renderExplanation(q), h("div", { class: "next-row" },
-      h("button", { class: "btn btn-wide", type: "button", id: "next-btn", onclick: goNext }, "다음 문제 풀기")));
+      h("button", { class: "btn btn-primary btn-wide", type: "button", onclick: goNext }, "다음 문제 풀기"),
+      correct ? h("button", { class: "btn btn-wide", type: "button", onclick: () => {
+        state = setRevisit(state, q.id, true);
+        persist();
+        goNext();
+      } }, "이 문제 다시 만나고 다음 문제 풀기") : null));
+    parts.push(renderExplanation(q));
   }
   view.replaceChildren(...parts);
 
-  function onSubmit(ev) {
-    ev.preventDefault();
-    if (!current.selected || current.submitted) return;
+  function onAnswer(cid) {
+    if (current.submitted) return;
+    current.selected = cid;
     current.submitted = true;
     state = recordAnswer(state, q.id, current.selected === q.answer);
     persist();
@@ -321,6 +306,45 @@ function renderDone() {
 }
 
 // ---------- records ----------
+async function renderCatalog() {
+  const request = ++presentationRequest;
+  setTitle("전체 문제 목록");
+  view.replaceChildren(h("p", { class: "loading", role: "status" }, "문제 목록을 불러오는 중…"));
+  let questions;
+  try {
+    questions = await Promise.all(index.ids.map(loadQuestion));
+  } catch {
+    if (request !== presentationRequest) return;
+    view.replaceChildren(h("section", { class: "error" }, h("h1", {}, "문제 목록을 불러오지 못했습니다"),
+      h("button", { class: "btn", type: "button", onclick: renderCatalog }, "다시 시도")));
+    return;
+  }
+  if (request !== presentationRequest) return;
+  const list = h("ul", { class: "catalog-list" });
+  const count = h("p", { class: "rec-count", role: "status" });
+  const search = h("input", { type: "search", class: "search", "aria-label": "전체 문제 검색", placeholder: "문제·주제·문항 ID 검색", oninput: fill });
+  const area = h("select", { class: "area-select", "aria-label": "출제 영역", onchange: fill },
+    h("option", { value: "" }, "모든 영역"), index.areas.map(a => h("option", { value: a.id }, `${a.id} ${a.name}`)));
+  function fill() {
+    const query = search.value.trim().toLowerCase();
+    const selected = questions.filter(q => (!area.value || q.area === area.value)
+      && `${q.id} ${q.topic} ${q.stem} ${index.areaName[q.area]}`.toLowerCase().includes(query));
+    count.textContent = `${selected.length.toLocaleString("ko-KR")}개`;
+    list.replaceChildren(...selected.map(q => {
+      const stem = q.stem.replaceAll("`", "").replace(/\s+/g, " ");
+      return h("li", { class: "catalog-row", "data-qid": q.id },
+        h("span", { class: `badge st-${statusOf(state, q.id)}` }, STATUS_LABEL[statusOf(state, q.id)]),
+        h("a", { class: "catalog-question", href: `#/q/${q.id}`, title: `${q.id} · ${index.areaName[q.area]} · ${stem}` }, stem),
+        h("a", { class: "btn btn-small", href: `#/q/${q.id}`, "aria-label": `${q.id} 풀기` }, "풀기"));
+    }));
+  }
+  view.replaceChildren(h("section", { class: "catalog" },
+    h("div", { class: "topbar" }, h("a", { class: "back", href: "#/" }, "← 처음")),
+    h("h1", {}, "전체 문제 목록"), h("div", { class: "search-row" }, search, area), count, list));
+  fill();
+  focusMain();
+}
+
 const recUi = { filter: "tried", query: "", area: "", limit: 50 };
 
 function renderRecords() {
@@ -443,7 +467,15 @@ function route() {
   if (hash !== "#/") showNotice();
   if (hash.startsWith("#/q/")) startQuiz(decodeURIComponent(hash.slice(4)));
   else if (hash === "#/quiz") startQuiz();
+  else if (hash === "#/questions") renderCatalog();
   else if (hash === "#/records") renderRecords();
+  else if (hash === "#/records/correct") {
+    recUi.filter = "correct";
+    recUi.query = "";
+    recUi.area = "";
+    recUi.limit = 50;
+    renderRecords();
+  }
   else renderHome();
 }
 

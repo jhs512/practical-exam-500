@@ -83,7 +83,6 @@ async function answer(page, request, baseURL, correct) {
   const pos = correct ? texts.indexOf(ans) : texts.findIndex((t) => t !== ans);
   expect(pos).toBeGreaterThanOrEqual(0);
   await page.locator(".choice").nth(pos).click();
-  await page.getByRole("button", { name: "제출", exact: true }).click();
   await expect(page.locator(".result-title")).toHaveText(correct ? "정답입니다" : "오답입니다");
   return { qid, q, pos, ans };
 }
@@ -92,6 +91,49 @@ test("home shows 문제풀기 and full counts", async ({ page }) => {
   await page.goto("./");
   await expect(page.getByRole("link", { name: "문제풀기" })).toBeVisible();
   await expect(page.locator(".stat").first()).toContainText("500");
+});
+
+test("correct result offers two next actions and revisit-next preserves the solved question", async ({ page, request, baseURL }) => {
+  const idx = await index(request, baseURL);
+  const ids = idx.items.map(item => item[0]);
+  const qid = ids[17];
+  await seed(page, stateWithAllCorrectExcept(ids, [qid]));
+  await page.goto("./#/quiz");
+  await answer(page, request, baseURL, true);
+  await expect(page.locator(".result button")).toHaveCount(2);
+  await page.getByRole("button", { name: "이 문제 다시 만나고 다음 문제 풀기", exact: true }).click();
+  await expect(page.locator(".result")).toHaveCount(0);
+  expect(await currentQid(page)).toBe(qid);
+  const stored = await page.evaluate(k => JSON.parse(localStorage.getItem(k)), KEY);
+  expect(stored.revisit[qid]).toBeTruthy();
+  expect(stored.records[qid].attempts).toBe(1);
+  await page.goto("./");
+  await page.getByRole("link", { name: "맞힌 문제 보기", exact: true }).click();
+  await expect(page.locator('[data-filter="correct"]')).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("searchbox", { name: "기록 검색" }).fill(qid);
+  await expect(page.locator(".rec-list > li")).toHaveCount(1);
+});
+
+test("all questions appear as compact rows, filter by every official area, and open directly", async ({ page, request, baseURL }) => {
+  const idx = await index(request, baseURL);
+  await page.goto("./");
+  await page.getByRole("link", { name: "전체 문제 목록", exact: true }).click();
+  await expect(page.locator(".catalog-row")).toHaveCount(500);
+  const filter = page.getByRole("combobox", { name: "출제 영역", exact: true });
+  await expect(filter.locator("option")).toHaveCount(13);
+  for (const area of idx.areas) {
+    await filter.selectOption(area.id);
+    await expect(page.locator(".catalog-row")).toHaveCount(idx.items.filter(item => item[1] === area.id).length);
+  }
+  await filter.selectOption("");
+  const qid = idx.items[77][0];
+  await page.getByRole("searchbox", { name: "전체 문제 검색", exact: true }).fill(qid);
+  await expect(page.locator(".catalog-row")).toHaveCount(1);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  await page.getByRole("link", { name: `${qid} 풀기`, exact: true }).click();
+  expect(await currentQid(page)).toBe(qid);
+  await expect(page.locator(".explain")).toHaveCount(0);
 });
 
 test("question shows ≥10 choices and hides answer/explanation before submit", async ({ page, request, baseURL }) => {
@@ -108,17 +150,20 @@ test("question shows ≥10 choices and hides answer/explanation before submit", 
   expect(await page.title()).not.toContain(q.choices.find((c) => c.id === q.answer).text);
   const aria = await page.locator("body").ariaSnapshot();
   expect(aria).not.toContain("정답");
-  await expect(page.getByRole("button", { name: "제출", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "제출", exact: true })).toHaveCount(0);
+  await expect(page.locator(".topbar .toggle")).toHaveCount(0);
 });
 
-test("selecting does not move options; submit shows feedback and linked explanation", async ({ page, request, baseURL }) => {
+test("one choice immediately grades once without moving options and shows linked explanation", async ({ page, request, baseURL }) => {
   await page.goto("./#/quiz");
   await currentQid(page);
   const before = await displayedTexts(page);
-  await page.locator(".choice").nth(3).click();
-  await page.locator(".choice").nth(5).click();
-  expect(await displayedTexts(page)).toEqual(before);
   const { q, pos, ans } = await answer(page, request, baseURL, false);
+  await expect(page.locator(".choice:disabled")).toHaveCount(q.choices.length);
+  await page.locator(".choice").first().evaluate(el => el.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  const stored = await page.evaluate(k => JSON.parse(localStorage.getItem(k)), KEY);
+  expect(stored.records[q.id].attempts).toBe(1);
+  await expect(page.getByRole("button", { name: "이 문제 다시 만나고 다음 문제 풀기", exact: true })).toHaveCount(0);
   expect(await displayedTexts(page)).toEqual(before);
   const ansPos = before.indexOf(ans) + 1;
   await expect(page.locator(".result")).toContainText(`정답은 ${String.fromCodePoint(0x2460 + ansPos - 1)}번`);
@@ -144,13 +189,13 @@ test("correct answers leave the pool, wrong ones return, then completion", async
   expect([A, B]).toContain(first);
   const other = first === A ? B : A;
   await answer(page, request, baseURL, false); // first stays unresolved
-  await page.getByRole("button", { name: "다음 문제", exact: true }).click();
+  await page.getByRole("button", { name: "다음 문제 풀기", exact: true }).click();
   expect(await currentQid(page)).toBe(other); // not the same one twice in a row
   await answer(page, request, baseURL, true);
-  await page.getByRole("button", { name: "다음 문제", exact: true }).click();
+  await page.getByRole("button", { name: "다음 문제 풀기", exact: true }).click();
   expect(await currentQid(page)).toBe(first); // the wrong one comes back
   await answer(page, request, baseURL, true);
-  await page.getByRole("button", { name: "다음 문제", exact: true }).click();
+  await page.getByRole("button", { name: "다음 문제 풀기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "출제할 문제가 없습니다" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "출제할 문제가 없습니다" })).toBeVisible();
@@ -172,12 +217,12 @@ test("revisit ON re-adds a solved question, survives a correct answer, OFF remov
   await page.getByRole("link", { name: "문제풀기" }).click();
   expect(await currentQid(page)).toBe(X);
   await answer(page, request, baseURL, true);
-  const tg = page.locator(".topbar .toggle");
-  await expect(tg).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "다음 문제", exact: true }).click();
+  await expect(page.locator(".topbar .toggle")).toHaveCount(0);
+  await page.getByRole("button", { name: "다음 문제 풀기", exact: true }).click();
   expect(await currentQid(page)).toBe(X); // only eligible question; shown again instead of looping
-  await page.locator(".topbar .toggle").click();
-  await expect(page.locator(".topbar .toggle")).toHaveAttribute("aria-pressed", "false");
+  await page.goto("./#/records");
+  await page.getByRole("searchbox", { name: "기록 검색" }).fill(X);
+  await page.locator(`[data-revisit-id="${X}"]`).click();
   await page.getByRole("link", { name: "← 처음" }).click();
   await page.getByRole("link", { name: "완료 화면 보기" }).click();
   await expect(page.getByRole("heading", { name: "출제할 문제가 없습니다" })).toBeVisible();
@@ -244,14 +289,12 @@ test("storage failure keeps the session usable and tells the user", async ({ pag
   await expect(page.locator(".stat").nth(2)).toContainText("1");
 });
 
-test("keyboard: choose with arrows/space and submit with Enter", async ({ page }) => {
+for (const key of ["Space", "Enter"]) test(`keyboard: focusing does not grade; ${key} immediately answers`, async ({ page }) => {
   await page.goto("./#/quiz");
   await currentQid(page);
-  await page.locator(".choice input").first().focus();
-  await page.keyboard.press("Space");
-  await page.keyboard.press("ArrowDown");
-  await expect(page.locator(".choice input").nth(1)).toBeChecked();
-  await page.keyboard.press("Enter");
+  await page.locator(".choice").first().focus();
+  await expect(page.locator(".result")).toHaveCount(0);
+  await page.keyboard.press(key);
   await expect(page.locator(".result")).toBeVisible();
 });
 

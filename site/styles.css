@@ -109,12 +109,10 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .choice {
   position: relative; display: grid; grid-template-columns: 28px 1fr auto; align-items: start; gap: 8px;
   min-height: var(--tap); padding: 11px 12px; border: 1.5px solid var(--line); border-radius: var(--radius);
-  background: var(--surface); cursor: pointer;
+  background: var(--surface); cursor: pointer; font: inherit; color: var(--ink); text-align: left; width: 100%;
 }
-.choice input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.choice:has(input:focus-visible) { outline: 3px solid #e0a526; outline-offset: 2px; }
-.choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
-.choice:has(input:disabled) { cursor: default; }
+.choice:focus-visible { outline: 3px solid #e0a526; outline-offset: 2px; }
+.choice:disabled { cursor: default; opacity: 1; }
 .choice .num { font-weight: 700; color: var(--accent); line-height: 1.6; }
 .choice-text { white-space: pre-wrap; }
 .choices.mono .choice-text { font-family: var(--mono); font-size: 15px; }
@@ -165,6 +163,10 @@ li.mine .cn-tag { color: var(--ng); }
 .toggle.on .toggle-thumb { transform: translateX(14px); }
 
 /* records */
+.catalog-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.catalog-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.catalog-question { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); padding: 10px 0; }
+.catalog-row .badge { white-space: nowrap; }
 .records h1 { font-size: 24px; margin-bottom: 6px; }
 .filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 10px; }
 .filter { min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 14px; cursor: pointer; }
