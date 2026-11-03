@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="정보처리기사 실기 대비 500문항 객관식 랜덤 훈련. 맞힌 문제는 빠지고 틀린 문제는 다시 나옵니다.">
+  <meta name="theme-color" content="#f6f4ef">
+  <title>정보처리기사 실기 500</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5f5b'/%3E%3Ctext x='16' y='22' font-size='15' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='700'%3E500%3C/text%3E%3C/svg%3E">
+  <link rel="preload" href="data/index.json" as="fetch" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#view">본문으로 건너뛰기</a>
+  <div class="notice" id="notice" role="status" hidden></div>
+  <main id="view" class="wrap">
+    <p class="loading" role="status">불러오는 중…</p>
+  </main>
+  <dialog id="reset-dialog" aria-labelledby="reset-title">
+    <form method="dialog">
+      <h2 id="reset-title">진도를 초기화할까요?</h2>
+      <p>이 브라우저에 저장된 <strong>이 앱의 학습 기록만</strong> 지웁니다.</p>
+      <ul>
+        <li>맞힘·틀림 상태와 시도 횟수</li>
+        <li>다시 만나기 설정</li>
+      </ul>
+      <p>다른 사이트나 다른 앱의 데이터는 그대로입니다. 초기화 후에는 500문항이 모두 다시 출제됩니다.</p>
+      <div class="dialog-actions">
+        <button class="btn" value="cancel" autofocus>취소</button>
+        <button class="btn btn-danger" value="reset">초기화</button>
+      </div>
+    </form>
+  </dialog>
+  <noscript><p class="wrap">이 앱은 JavaScript가 필요합니다.</p></noscript>
+</body>
+</html>

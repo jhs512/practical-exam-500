@@ -1,0 +1,14 @@
+{
+  "name": "practical-exam-500",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "python gen/build.py",
+    "test:unit": "node --test tests/domain.test.mjs",
+    "test:e2e": "playwright test",
+    "serve": "node tests/serve.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}
